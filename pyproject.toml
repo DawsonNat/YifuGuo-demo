@@ -1,0 +1,106 @@
+[project]
+name = "agent-world-backend"
+version = "0.1.0"
+description = "Agent World - 多地点 / 多通道 / 多池 LLM 仿真引擎，基于 OASIS + MiroFish 演化"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0" }
+authors = [
+    { name = "Agent World Team" }
+]
+
+dependencies = [
+    # 核心框架
+    "flask>=3.0.0",
+    "flask-cors>=6.0.0",
+
+    # Zep Cloud
+    "zep-cloud==3.13.0",
+
+    # OASIS 社交媒体模拟
+    # 注：camel-oasis 已 fork 进 vendor/oasis/，作为本仓库 wheel 的子包；
+    # 不再从 PyPI 安装 camel-oasis，避免与 vendored oasis 冲突。
+    "camel-ai==0.2.78",
+
+    # 文件处理
+    "PyMuPDF>=1.24.0",
+    # 编码检测（支持非UTF-8编码的文本文件）
+    "charset-normalizer>=3.0.0",
+    "chardet>=5.0.0",
+
+    # 工具库
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "PyYAML>=6.0",
+    "httpx>=0.27.0",  # llm/providers/mistral.py 与 browser_use.py 直接依赖
+
+    # 类注册 / 配置 schema 生成（替换 OASIS / 计划中的 *Registry 类层）
+    "conscribe>=1.1.1",
+]
+
+[project.optional-dependencies]
+# ---------- 内置 demo（agent_world.demo.run_demo）----------
+# 最小依赖：只需要 OpenAI 客户端 + YAML 配置 + Pydantic + conscribe
+# （Pydantic / conscribe 已在 dependencies 里，这里只补 openai）。
+demo = [
+    "openai>=1.0.0",
+]
+
+# ---------- LLM provider 可选依赖 ----------
+# 按 provider 拆分；只装用得到的，避免拉一堆云厂商 SDK
+llm-openai = [
+    "openai>=1.0.0",
+]
+llm-anthropic = [
+    "anthropic>=0.40.0",
+]
+llm-google = [
+    "google-genai>=0.3.0",
+]
+llm-groq = [
+    "groq>=0.11.0",
+]
+llm-ollama = [
+    "ollama>=0.4.0",
+]
+llm-oci = [
+    "oci>=2.130.0",
+]
+llm-bedrock = [
+    "boto3>=1.34.0",
+    "anthropic[bedrock]>=0.40.0",
+]
+# 一键装齐所有 provider
+llm-all = [
+    "openai>=1.0.0",
+    "anthropic[bedrock]>=0.40.0",
+    "google-genai>=0.3.0",
+    "groq>=0.11.0",
+    "ollama>=0.4.0",
+    "oci>=2.130.0",
+    "boto3>=1.34.0",
+]
+
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pipreqs>=0.5.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.hatch.build.targets.wheel]
+# 同时声明两个 src 包：
+#   * agent_world/  — 项目主代码
+#   * vendor/oasis/oasis/  — fork 后的 OASIS（编辑过 typing/platform/agent 等）
+# Hatchling 默认按 packages 里每条路径的 basename 作为 wheel 顶层包名，
+# 因此 ``vendor/oasis/oasis`` 会被安装为 ``oasis``。两边都参与 editable
+# install（``pip install -e .``），无需再设置 PYTHONPATH。
+packages = ["agent_world", "vendor/oasis/oasis"]
