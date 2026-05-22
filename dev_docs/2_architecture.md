@@ -1,6 +1,6 @@
 # 2. 双段式异步 API 与后端引擎架构设计 (Architecture)
 
-**文档目标**：设计前后端交互的数据流转与 JSON 结构，同时**深度拆解后端引擎的运转流程**，明确 Web 前端、Flask API、IPC Server 与 `WorldStep` (Tick) 之间的协同机制，彻底解决“大模型推理导致用户干等”的 UX 痛点。
+**文档目标**：设计前后端交互的数据流转与 JSON 结构，同时**深度结合现有的 Flask 路由与 IPC 机制**，明确 Web 前端、Flask API、IPC Server 与 `WorldStep` (Tick) 之间的协同机制，彻底解决“大模型推理导致用户干等”的 UX 痛点。
 
 ---
 
@@ -10,17 +10,17 @@
 
 ```text
 [ Web 前端 (三屏 UI) ]
-       |  (1) POST /api/action (携带 Query)
+       |  (1) POST /api/simulation/<sim_id>/inject-event (携带玩家 Query)
        v
-[ Flask API (app/api/chat.py) ] 
+[ Flask API (app/api/simulation.py) ] 
        |  (2) 异步调用 DeepSeek-V4-Pro 生成 immediate_msg
        |  (3) 返回即时响应 (task_id, immediate_msg) 给前端
        |
-       |  (4) 通过 IPC 发送 Action Command
+       |  (4) 通过 IPC Client 发送 INJECT_SCRIPT_EVENT Command
        v
-[ IPC Server (后台常驻) ]
+[ IPC Server (agent_world/ipc/server.py) ]
        |
-       |  (5) 将 Query 注入 F2F 总线，并触发 WorldStep.run_one_tick()
+       |  (5) 接收 Command，将 Query 注入 F2F 总线，触发 WorldStep.run_one_tick()
        v
 [ Agent World Engine (Tick 流转 - 核心后台逻辑) ]
        |  (6.1) 感知 (Perception)：NPC 收集环境信息和玩家 Query
@@ -31,7 +31,7 @@
 [ WorldDB (持久化) ] <--- (7) 记录所有 Message 和 State
 
 [ Web 前端 ]
-       |  (8) GET /api/action/result?task_id=... (轮询)
+       |  (8) GET /api/simulation/<sim_id>/action-result?task_id=... (轮询)
        v
 [ Flask API ] ---> (9) 查询 WorldDB，返回最终结果 (public_messages, observer_messages)
 ```
@@ -40,33 +40,39 @@
 
 ## 二、 API 详细设计与前端交互
 
-### API 1：发起交互与获取极速反馈
-**Endpoint**: `POST /api/simulation/<sim_id>/action`
+**重大修正**：为了复用现有代码结构，我们不新建 `/api/action` 路由，而是**改造并复用现有的 `POST /api/simulation/<sim_id>/inject-event` 接口**作为发起交互的入口，并新增一个轮询接口。
+
+### API 1：发起交互与获取极速反馈 (改造现有接口)
+**Endpoint**: `POST /api/simulation/<sim_id>/inject-event`
 **作用**：接收玩家的输入，注入世界，并利用统一的 DeepSeek 模型生成一个动态的“即时状态”，让前端 UI 动起来。
 
 **Request Body (JSON)**:
 ```json
 {
-  "player_id": "player_1",
-  "place_id": "nvidia_hq_boardroom",
-  "query": "黄总，我的底层算法能让渲染速度提升 10 倍。"
+  "event": {
+    "type": "player_input",
+    "player_id": "player_1",
+    "place_id": "nvidia_hq_boardroom",
+    "query": "黄总，我的底层算法能让渲染速度提升 10 倍。"
+  }
 }
 ```
 
 **Backend Logic (API 1 处理流程)**:
-1. 接收到请求后，生成一个唯一的 `task_id`。
+1. Flask 接收到请求后，生成一个唯一的 `task_id`。
 2. **生成 `immediate_msg`（单模型并发调用）**：
-   - Flask 收到请求后，**不等待**主引擎跑 Tick。
-   - 而是立刻提取当前场景的简要上下文（如：“Jensen 正在听玩家说话，玩家说：[Query]”）。
-   - **异步调用 DeepSeek-V4-Pro**，Prompt 设定为严格的限制指令：“根据玩家的话，用一句话描写听者（Jensen）的微表情或肢体动作，不要让他开口说话。要求极速响应。”
-   - 生成结果如：“Jensen 停下了喝水的动作，眼神变得锐利起来...”。
-3. 将玩家的 `query` 封装为 F2F Message，通过 IPC 通知后台引擎开始跑 Tick。
+   - Flask **不等待** IPC Server 跑 Tick。
+   - 提取简要上下文，**异步调用 DeepSeek-V4-Pro**。
+   - Prompt 限制：“根据玩家的话，用一句话描写听者（Jensen）的微表情或肢体动作，不要让他开口说话。要求极速响应。”
+   - 得到结果：“Jensen 停下了喝水的动作，眼神变得锐利起来...”。
+3. 通过 `simulation_ipc.client` 发送 `CommandType.INJECT_SCRIPT_EVENT` 到后台 IPC Server。
 4. 将生成的 `immediate_msg` 返回给前端。
 
 **Response Body (JSON)**:
 ```json
 {
   "success": true,
+  "simulation_id": "shedog_husband",
   "data": {
     "task_id": "task_9527",
     "immediate_msg": "Jensen 停下了喝水的动作，眼神变得锐利起来...",
@@ -77,14 +83,21 @@
 
 ---
 
-### API 2：轮询获取最终结果
-**Endpoint**: `GET /api/simulation/<sim_id>/action/result?task_id=<task_id>`
+### API 2：轮询获取最终结果 (新增接口)
+**Endpoint**: `GET /api/simulation/<sim_id>/action-result?task_id=<task_id>`
 **作用**：前端拿到 `task_id` 后，每隔 1-2 秒轮询此接口，获取后台 Tick 跑完后的最终结果。
+
+**Backend Logic**:
+1. Flask 接收到轮询请求。
+2. 查询 IPC Server 对应的 `task_id` 状态（是否为 `COMPLETED`）。
+3. 如果未完成，返回 `{"status": "processing"}`。
+4. 如果已完成，直接以**只读模式**查询 `WorldDB`（复用类似 `world_state` 接口的逻辑），提取该 `task_id` 触发的 Tick 范围内产生的所有 Message 和状态更新。
 
 **Response Body (JSON)**:
 ```json
 {
   "success": true,
+  "simulation_id": "shedog_husband",
   "data": {
     "status": "completed",
     "end_tick": 32,
@@ -136,7 +149,7 @@
 前端调用 API 1 后，后台的 `Agent World Engine` 究竟发生了什么？以下是详细的内部流转设计：
 
 ### 1. 触发与感知阶段 (Tick N)
-*   **事件注入**：IPC Server 收到 API 1 的指令，将玩家的 Query 作为一个 `F2F Message` 写入 `WorldDB`，时间戳记为 `Tick N`。
+*   **事件注入**：IPC Server 收到 `INJECT_SCRIPT_EVENT` 指令，将玩家的 Query 作为一个 `F2F Message` 写入 `WorldDB`，时间戳记为 `Tick N`。
 *   **强制唤醒**：IPC Server 调用 `WorldStep.run_one_tick()`。
 *   **感知构建 (PerceptionBuilder)**：引擎遍历当前会议室（`nvidia_hq_boardroom`）内的所有 Agent。Jensen 的感知模块会收集到：“玩家在 Tick N 对大家说：[Query]”。
 
@@ -161,5 +174,5 @@
 *   **最终回复生成**：Jensen 带着更新后的记忆和状态，再次调用 **DeepSeek-V4-Pro**，生成最终对玩家的回复：“我给你 500 张显卡。”（注入 F2F 总线）。Tick N+2 结束。
 
 ### 5. 循环终止与结果返回
-*   引擎检查发现没有未处理的内部消息，且 NPC 已经对玩家做出了正面回应。Tick 循环暂停。
-*   此时，前端的 API 2 轮询正好到来，Flask API 从 `WorldDB` 中提取 Tick N 到 N+2 之间的所有数据，打包返回给前端。
+*   引擎检查发现没有未处理的内部消息，且 NPC 已经对玩家做出了正面回应。Tick 循环暂停，将 IPC Task 标记为 `COMPLETED`。
+*   此时，前端的 API 2 轮询正好到来，Flask API 发现任务完成，从 `WorldDB` 中提取 Tick N 到 N+2 之间的所有数据，打包返回给前端。
