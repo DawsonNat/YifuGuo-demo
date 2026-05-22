@@ -13,7 +13,7 @@
        |  (1) POST /api/action (携带 Query)
        v
 [ Flask API (app/api/chat.py) ] 
-       |  (2) 调用极小模型 (如 DeepSeek-Flash) 极速生成 immediate_msg
+       |  (2) 异步调用 DeepSeek-V4-Pro 生成 immediate_msg
        |  (3) 返回即时响应 (task_id, immediate_msg) 给前端
        |
        |  (4) 通过 IPC 发送 Action Command
@@ -24,7 +24,7 @@
        v
 [ Agent World Engine (Tick 流转 - 核心后台逻辑) ]
        |  (6.1) 感知 (Perception)：NPC 收集环境信息和玩家 Query
-       |  (6.2) 思考 (LLM 推理)：NPC 调用主模型 (如 DeepSeek-Chat) 决定下一步动作
+       |  (6.2) 思考 (LLM 推理)：NPC 调用 DeepSeek-V4-Pro 决定下一步动作
        |  (6.3) 动作 (Action)：NPC 可能直接回复，也可能调用工具进行内部私聊 (RDC)
        |  (6.4) 循环判定：若有未处理私信，自动触发下一个 Tick
        v
@@ -42,7 +42,7 @@
 
 ### API 1：发起交互与获取极速反馈
 **Endpoint**: `POST /api/simulation/<sim_id>/action`
-**作用**：接收玩家的输入，注入世界，并利用小模型极速生成一个动态的“即时状态”，让前端 UI 动起来。
+**作用**：接收玩家的输入，注入世界，并利用统一的 DeepSeek 模型生成一个动态的“即时状态”，让前端 UI 动起来。
 
 **Request Body (JSON)**:
 ```json
@@ -55,13 +55,13 @@
 
 **Backend Logic (API 1 处理流程)**:
 1. 接收到请求后，生成一个唯一的 `task_id`。
-2. **极速生成 `immediate_msg`（非预设）**：
+2. **生成 `immediate_msg`（单模型并发调用）**：
    - Flask 收到请求后，**不等待**主引擎跑 Tick。
    - 而是立刻提取当前场景的简要上下文（如：“Jensen 正在听玩家说话，玩家说：[Query]”）。
-   - 调用一个**极小/极速的 LLM（如 DeepSeek-Flash，要求 < 500ms 返回）**，Prompt 设定为：“用一句话描写听者的微表情或肢体动作，不要说话”。
+   - **异步调用 DeepSeek-V4-Pro**，Prompt 设定为严格的限制指令：“根据玩家的话，用一句话描写听者（Jensen）的微表情或肢体动作，不要让他开口说话。要求极速响应。”
    - 生成结果如：“Jensen 停下了喝水的动作，眼神变得锐利起来...”。
 3. 将玩家的 `query` 封装为 F2F Message，通过 IPC 通知后台引擎开始跑 Tick。
-4. 立刻将生成的 `immediate_msg` 返回给前端。
+4. 将生成的 `immediate_msg` 返回给前端。
 
 **Response Body (JSON)**:
 ```json
@@ -141,15 +141,15 @@
 *   **感知构建 (PerceptionBuilder)**：引擎遍历当前会议室（`nvidia_hq_boardroom`）内的所有 Agent。Jensen 的感知模块会收集到：“玩家在 Tick N 对大家说：[Query]”。
 
 ### 2. 思考与动作阶段 (Tick N)
-*   **LLM 推理**：Jensen Agent 将收集到的感知，结合自身的 System Prompt（性格、当前状态、目标），发送给主模型（如 DeepSeek-Chat）。
+*   **LLM 推理**：Jensen Agent 将收集到的感知，结合自身的 System Prompt（性格、当前状态、目标），发送给 **DeepSeek-V4-Pro**。
 *   **工具调用 (Tool Call)**：
-    *   主模型根据 Prompt 中的强制规则（“遇到技术细节必须向 VP 求证”），决定暂时不回复玩家。
-    *   主模型输出一个 Tool Call：`send_message(recipient="Tech VP", channel="RDC", content="查一下这小子的 GitHub...")`。
+    *   模型根据 Prompt 中的强制规则（“遇到技术细节必须向 VP 求证”），决定暂时不回复玩家。
+    *   模型输出一个 Tool Call：`send_message(recipient="Tech VP", channel="RDC", content="查一下这小子的 GitHub...")`。
 *   **动作执行**：引擎解析该 Tool Call，将这条私信写入 `WorldDB`（标记为 RDC 通道，目标为 Tech VP）。Tick N 结束。
 
 ### 3. 内部发酵与连续 Tick 触发 (Tick N+1)
 *   **自动循环判定**：Tick N 结束后，引擎检查 `WorldDB`，发现有一条未送达的 RDC 消息。引擎**自动触发** `Tick N+1`。
-*   **VP 感知与思考**：Tech VP 的感知模块收集到 Jensen 的私信。VP 调用主模型进行推理，生成回复：“代码很乱，但底层算法是天才设计。”
+*   **VP 感知与思考**：Tech VP 的感知模块收集到 Jensen 的私信。VP 调用 **DeepSeek-V4-Pro** 进行推理，生成回复：“代码很乱，但底层算法是天才设计。”
 *   **VP 动作**：VP 通过 RDC 通道将回复发给 Jensen。Tick N+1 结束。
 
 ### 4. 记忆生效与最终回复 (Tick N+2)
@@ -158,7 +158,7 @@
 *   **路由节点干预 (State Check Hook)**：
     *   在 Tick N+2 开始前，后端的**状态机钩子**介入。
     *   钩子检测到 VP 给出了正面评价，强制调用 `WorldState.update_agent_prompt()`，将 Jensen 的状态从“傲慢”修改为“兴奋”。
-*   **最终回复生成**：Jensen 带着更新后的记忆和状态，再次调用主模型，生成最终对玩家的回复：“我给你 500 张显卡。”（注入 F2F 总线）。Tick N+2 结束。
+*   **最终回复生成**：Jensen 带着更新后的记忆和状态，再次调用 **DeepSeek-V4-Pro**，生成最终对玩家的回复：“我给你 500 张显卡。”（注入 F2F 总线）。Tick N+2 结束。
 
 ### 5. 循环终止与结果返回
 *   引擎检查发现没有未处理的内部消息，且 NPC 已经对玩家做出了正面回应。Tick 循环暂停。
