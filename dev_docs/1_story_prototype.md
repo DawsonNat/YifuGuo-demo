@@ -20,7 +20,7 @@
     *   **位置**：`nvidia_hq_boardroom`（与玩家同处一室）。
     *   **作用**：与玩家进行面对面（F2F）交互的主要对象。
 2.  **Tech VP (Agent ID: 4)**：
-    *   **身份**：NVIDIA 核心技术副总裁。极客，只看代码不听故事。
+    *   **身份**：NVIDIA 核心技术副总裁。极客，只看技术逻辑的严密性。
     *   **位置**：`tech_vp_office`（不在会议室）。
     *   **作用**：作为后台验证者。他听不到玩家说话，只通过私聊（RDC）通道接收 Jensen 的指令，并给出技术评价。
 3.  **玩家 (Player)**：
@@ -34,7 +34,7 @@
 *注：为了保持底层 `agent_world` 引擎的纯洁性，以下数值由 **Flask Web 应用层** 维护，不写入底层引擎。Flask 每次收到玩家 Query 时，会调用大模型对玩家的发言进行打分，并累加到 Session 中。*
 
 *   **Vision (愿景值)**：玩家讲故事、画大饼的能力。
-*   **Execution (执行值)**：玩家展现出的工程能力和底层技术硬实力。
+*   **Execution (执行值)**：玩家展现出的工程能力和底层技术逻辑的严密性。
 *   **Trust (信任值)**：Jensen 和 VP 对玩家的信任度。
 
 ---
@@ -49,14 +49,14 @@
 *   **【路由节点 A】 (Turn 10 结束时触发检查)**：
     *   *条件判定*：Flask 层检查玩家的 `Vision` 数值。
     *   *路由分支 1 (Bad End)*：若数值未达标，Flask 注入广播事件（保安驱逐），Demo 结束。
-    *   *路由分支 2 (推进)*：若数值达标，Flask 通过 IPC 注入 `StateChangeEffect`，将 Jensen 的 `current_state` 修改为 `"被玩家的狂言引起了兴趣，决定验证其底层技术的真实性。"`，进入 Phase 2。
+    *   *路由分支 2 (推进)*：若数值达标，Flask 通过 IPC 注入 `StateChangeEffect`，将 Jensen 的 `current_state` 修改为 `"被玩家的狂言引起了兴趣，决定验证其底层技术逻辑的真实性。"`，进入 Phase 2。
 
-### Phase 2：技术审查与后台博弈 (Turn 11 - 25) 【核心 Feature 展示区】
+### Phase 2：技术逻辑审查与后台博弈 (Turn 11 - 25) 【核心 Feature 展示区】
 *   **当前状态 (`current_state`)**：Jensen 开始认真对待，但保持怀疑。
 *   **动态交互与核心 Feature (双 Agent 联动)**：
     *   Jensen 的 Prompt 中有一条强制行为规则（Behavior Hint）：**“遇到关键技术主张时，必须使用 `send_message` 工具向 Tech VP 求证。”**
-    *   Jensen 会根据玩家的发言，调用工具通过 RDC 通道向 Tech VP (Agent 4) 发送私信。
-    *   Tech VP (Agent 4) 收到私信后，被引擎唤醒，调用大模型生成回复，并通过 RDC 发回给 Jensen。
+    *   Jensen 会根据玩家的发言，调用工具通过 RDC 通道向 Tech VP (Agent 4) 发送私信（例如：“这小子说他的稀疏注意力机制能降低 90% 显存，逻辑上行得通吗？”）。
+    *   Tech VP (Agent 4) 收到私信后，由于无法直接审查代码，他会**根据 Jensen 转述的技术概念进行逻辑推演**。然后调用大模型生成回复，并通过 RDC 发回给 Jensen（例如：“虽然没看到代码，但如果他真的解决了哈希碰撞问题，这个底层逻辑是个天才设计。”）。
 *   **【路由节点 B】 (Turn 25 结束时，或 Tech VP 回复后触发)**：
     *   *条件判定*：Flask 轮询发现 Tech VP 给出了正面评价（该评价已通过 `PerceptionBuilder` 进入 Jensen 的记忆）。
     *   *路由分支*：Flask 注入 `StateChangeEffect`，将 Jensen 的 `current_state` 修改为 `"极度兴奋，确认了技术的颠覆性，决定不惜代价拿下这个项目。"`，进入 Phase 3。
