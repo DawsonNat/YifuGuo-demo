@@ -13,9 +13,19 @@
 *   **时间**：下午 4:00，阳光刺眼。
 
 ### 2. 出场角色 (Agents)
-1.  **玩家 (Player)**：19 岁辍学生，RAMUS 创始人。（在引擎中，玩家没有实体 Agent，而是通过 `DialogueInjectionEffect` 向 NPC 注入声音）。
-2.  **Jensen Hwang (NPC 1)**：NVIDIA CEO。掌握算力生杀大权。
-3.  **Tech VP (NPC 2)**：NVIDIA 核心技术副总裁。极客，只看代码不听故事。目前在自己的独立办公室（`tech_vp_office`）。
+**重大澄清**：在底层 `agent_world` 引擎中，本剧本**同时运行着 2 个实体 Agent**，玩家则作为“世界之外的干预者”存在。
+
+1.  **Jensen Hwang (Agent ID: 3)**：
+    *   **身份**：NVIDIA CEO。掌握算力生杀大权。
+    *   **位置**：`nvidia_hq_boardroom`（与玩家同处一室）。
+    *   **作用**：与玩家进行面对面（F2F）交互的主要对象。
+2.  **Tech VP (Agent ID: 4)**：
+    *   **身份**：NVIDIA 核心技术副总裁。极客，只看代码不听故事。
+    *   **位置**：`tech_vp_office`（不在会议室）。
+    *   **作用**：作为后台验证者。他听不到玩家说话，只通过私聊（RDC）通道接收 Jensen 的指令，并给出技术评价。
+3.  **玩家 (Player)**：
+    *   **身份**：19 岁辍学生，RAMUS 创始人。
+    *   **引擎映射**：在引擎中，玩家**没有实体 Agent**。玩家的输入是通过 Flask API 调用 `DialogueInjectionEffect`，直接作为一条 System Message 注入给 Jensen，模拟“玩家对 Jensen 说话”的效果。
 
 ---
 
@@ -43,10 +53,10 @@
 
 ### Phase 2：技术审查与后台博弈 (Turn 11 - 25) 【核心 Feature 展示区】
 *   **当前状态 (`current_state`)**：Jensen 开始认真对待，但保持怀疑。
-*   **动态交互与核心 Feature**：
+*   **动态交互与核心 Feature (双 Agent 联动)**：
     *   Jensen 的 Prompt 中有一条强制行为规则（Behavior Hint）：**“遇到关键技术主张时，必须使用 `send_message` 工具向 Tech VP 求证。”**
-    *   Jensen 会根据玩家的发言，调用工具通过 RDC 通道向 Tech VP 发送私信。
-    *   Tech VP 收到私信后，调用大模型生成回复，并通过 RDC 发回给 Jensen。
+    *   Jensen 会根据玩家的发言，调用工具通过 RDC 通道向 Tech VP (Agent 4) 发送私信。
+    *   Tech VP (Agent 4) 收到私信后，被引擎唤醒，调用大模型生成回复，并通过 RDC 发回给 Jensen。
 *   **【路由节点 B】 (Turn 25 结束时，或 Tech VP 回复后触发)**：
     *   *条件判定*：Flask 轮询发现 Tech VP 给出了正面评价（该评价已通过 `PerceptionBuilder` 进入 Jensen 的记忆）。
     *   *路由分支*：Flask 注入 `StateChangeEffect`，将 Jensen 的 `current_state` 修改为 `"极度兴奋，确认了技术的颠覆性，决定不惜代价拿下这个项目。"`，进入 Phase 3。
