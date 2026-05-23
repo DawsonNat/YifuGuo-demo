@@ -1,74 +1,82 @@
 # 1. 剧情原型与交互逻辑设计 (Story Prototype)
 
-**文档目标**：将《Dropout in Silicon Valley》第五章转化为可执行的 Multi-Agent 交互剧本，规划 25-50 个玩家 Turn 的状态机路由，并强制植入“NPC 互相影响记忆”的核心 Feature。
+**文档目标**：将全新的《HBM 显存价格保卫战》转化为可执行的 Multi-Agent 交互剧本，规划 20-25 个玩家 Turn 的状态机路由，并深度融合“多地点移动 (Move)”、“NPC 跨房间私聊 (RDC)”以及“阵营对抗”的核心 Feature。
 
-**架构参照**：严格遵循 `dev_logs/08_智能体与记忆管理_Agent_Memory.md` 中关于 Agent 字段的定义，以及 `dev_logs/10_剧本引擎与事件注入_Script_Engine.md` 中关于状态修改的机制。
+**架构参照**：严格遵循 `dev_logs/07-11` 号底层架构白皮书。
 
 ---
 
 ## 一、 场景与角色设定
 
-### 1. 场景背景
-*   **地点**：NVIDIA 硅谷总部，顶层全玻璃会议室（`nvidia_hq_boardroom`）。
-*   **时间**：下午 4:00，阳光刺眼。
+### 1. 场景地点 (Places)
+1.  **`nvidia_reception` (英伟达接待前台)**：玩家的初始出生点。
+2.  **`negotiation_room` (主谈判会议室)**：三大存储巨头逼宫英伟达的战场。
+3.  **`jensen_private_room` (黄仁勋私人会议室)**：私密的技术验证空间。
 
-### 2. 出场角色 (Agents)
-**重大澄清**：在底层 `agent_world` 引擎中，本剧本**同时运行着 2 个实体 Agent**，玩家则作为“世界之外的干预者”存在。
+### 2. 出场角色 (Agents - 3大阵营, 6个实体Agent)
 
-1.  **Jensen Hwang (Agent ID: 3)**：
-    *   **身份**：NVIDIA CEO。掌握算力生杀大权。
-    *   **位置**：`nvidia_hq_boardroom`（与玩家同处一室）。
-    *   **作用**：与玩家进行面对面（F2F）交互的主要对象。
-2.  **Tech VP (Agent ID: 4)**：
-    *   **身份**：NVIDIA 核心技术副总裁。极客，只看技术逻辑的严密性。
-    *   **位置**：`tech_vp_office`（不在会议室）。
-    *   **作用**：作为后台验证者。他听不到玩家说话，只通过私聊（RDC）通道接收 Jensen 的指令，并给出技术评价。
-3.  **玩家 (Player)**：
-    *   **身份**：19 岁辍学生，RAMUS 创始人。
-    *   **引擎映射**：在引擎中，玩家**没有实体 Agent**。玩家的输入是通过 Flask API 调用 `DialogueInjectionEffect`，直接作为一条 System Message 注入给 Jensen，模拟“玩家对 Jensen 说话”的效果。
+**【玩家阵营】**
+*   **玩家 (Player)**：无实体 Agent。通过 API 向所在房间的 NPC 注入对话。掌握着能大幅降低 AI 显存消耗的革命性压缩算法。
+
+**【英伟达阵营 (防守方)】**
+1.  **接待前台 (Agent 1)**：位于 `nvidia_reception`。负责接待玩家，并通过 RDC 向黄仁勋通报高价值信息。
+2.  **Jensen Hwang (Agent 2)**：位于 `negotiation_room`。正因 HBM 涨价被三大巨头围攻，处于劣势。
+3.  **Tech VP (Agent 3)**：位于 `negotiation_room`。协助 Jensen 谈判，负责评估底层技术。
+
+**【存储巨头阵营 (进攻方)】**
+4.  **SK Hynix CEO (Agent 4)**：位于 `negotiation_room`。HBM 市场老大，态度最强硬，主导涨价。
+5.  **Micron CEO (Agent 5)**：位于 `negotiation_room`。跟风涨价，看重短期利润。
+6.  **Samsung CEO (Agent 6)**：位于 `negotiation_room`。老谋深算，试图在涨价中抢占份额。
 
 ---
 
 ## 二、 核心数值系统 (Stats)
 
-*注：为了保持底层 `agent_world` 引擎的纯洁性，以下数值由 **Flask Web 应用层** 维护，不写入底层引擎。Flask 每次收到玩家 Query 时，会调用大模型对玩家的发言进行打分，并累加到 Session 中。*
-
-*   **Vision (愿景值)**：玩家讲故事、画大饼的能力。
-*   **Execution (执行值)**：玩家展现出的工程能力和底层技术逻辑的严密性。
-*   **Trust (信任值)**：Jensen 和 VP 对玩家的信任度。
+由 Flask Web 层维护，每次玩家输入后调用大模型打分累加：
+*   **Vision (愿景值)**：画大饼、商业谈判能力。
+*   **Execution (执行值)**：技术逻辑的严密性。
+*   **Trust (信任值)**：英伟达阵营对你的信任度。
+*   **Burnout (崩溃值)**：面对三大巨头施压时的抗压能力（若过高则谈判崩盘）。
 
 ---
 
-## 三、 动态路由机制与情节点设计 (The Dynamic Routing System)
+## 三、 动态路由机制与情节点设计 (20-25 Turns)
 
-**核心机制**：剧情非写死。对话由 LLM 实时生成。路由节点通过 Flask 层向底层引擎注入 `StateChangeEffect`，修改 Agent 的 `current_state`（B5 提示词的第三段），从而动态引导 LLM 的生成倾向。
+### Phase 1：前台的破局者 (Turn 1 - 4)
+*   **初始物理分布**：玩家与前台(Agent 1)在 `nvidia_reception`；其余 5 人在 `negotiation_room` 激烈争吵。
+*   **动态交互**：
+    *   玩家向**前台**抛出自己的革命性显存压缩算法。
+    *   前台的 Prompt 强制规则：一旦听到颠覆性技术，必须立刻使用 `send_message` (RDC) 给正在开会的 Jensen 发私信（例如：“老板，前台有个疯子说他的算法能把 HBM 需求砍掉 80%”）。
+    *   与此同时，后台的 `negotiation_room` 里，三大巨头正在疯狂给 Jensen 施压要求涨价（上帝视角展示）。
+*   **【路由节点 A】 (Turn 4 结束时触发)**：
+    *   *条件判定*：Flask 检查 `Vision` + `Execution` 是否达标。
+    *   *状态跃迁*：若达标，Flask 注入 **`MoveEffect`**，将 Jensen (Agent 2) 从会议室瞬间移动到 `jensen_private_room`。同时前端 UI 提示玩家被前台带入了私人会议室。进入 Phase 2。
 
-### Phase 1：破冰与狂言 (Turn 1 - 10)
-*   **当前状态 (`current_state`)**：Jensen 的初始状态为 `"极度不耐烦，频频看表，想要快速打发走眼前的年轻人。"`
-*   **动态交互**：玩家自由输入。Jensen 会生成极具压迫感和质疑的回复。
-*   **【路由节点 A】 (Turn 10 结束时触发检查)**：
-    *   *条件判定*：Flask 层检查玩家的 `Vision` 数值。
-    *   *路由分支 1 (Bad End)*：若数值未达标，Flask 注入广播事件（保安驱逐），Demo 结束。
-    *   *路由分支 2 (推进)*：若数值达标，Flask 通过 IPC 注入 `StateChangeEffect`，将 Jensen 的 `current_state` 修改为 `"被玩家的狂言引起了兴趣，决定验证其底层技术逻辑的真实性。"`，进入 Phase 2。
+### Phase 2：私密的技术审查 (Turn 5 - 12)
+*   **当前物理分布**：玩家与 Jensen 在 `jensen_private_room`；VP 与三大巨头仍在 `negotiation_room` 僵持。
+*   **动态交互**：
+    *   Jensen 态度急躁：“我只有 3 分钟，外面那群吸血鬼还在等我。你的算法是什么？”
+    *   玩家介绍技术细节。
+    *   Jensen 听完后，调用 `send_message` (RDC) 向仍在会议室里的 Tech VP (Agent 3) 求证：“这小子说他解决了显存带宽瓶颈，逻辑成立吗？”
+    *   Tech VP 在会议室里一边应付三大巨头，一边通过 RDC 回复 Jensen：“如果他用了XXX哈希，理论上可行，这是个核武器！”
+*   **【路由节点 B】 (Turn 12 结束时触发)**：
+    *   *条件判定*：Tech VP 给出正面评价，且玩家 `Execution` 达标。
+    *   *状态跃迁*：Flask 注入 **`StateChangeEffect`**（Jensen 状态变为“极度兴奋，找到了反击的武器”），并注入 **`MoveEffect`** 将 Jensen 移回 `negotiation_room`（玩家在剧情上跟进）。进入 Phase 3。
 
-### Phase 2：技术逻辑审查与后台博弈 (Turn 11 - 25) 【核心 Feature 展示区】
-*   **当前状态 (`current_state`)**：Jensen 开始认真对待，但保持怀疑。
-*   **动态交互与核心 Feature (双 Agent 联动)**：
-    *   Jensen 的 Prompt 中有一条强制行为规则（Behavior Hint）：**“遇到关键技术主张时，必须使用 `send_message` 工具向 Tech VP 求证。”**
-    *   Jensen 会根据玩家的发言，调用工具通过 RDC 通道向 Tech VP (Agent 4) 发送私信（例如：“这小子说他的稀疏注意力机制能降低 90% 显存，逻辑上行得通吗？”）。
-    *   Tech VP (Agent 4) 收到私信后，由于无法直接审查代码，他会**根据 Jensen 转述的技术概念进行逻辑推演**。然后调用大模型生成回复，并通过 RDC 发回给 Jensen（例如：“虽然没看到代码，但如果他真的解决了哈希碰撞问题，这个底层逻辑是个天才设计。”）。
-*   **【路由节点 B】 (Turn 25 结束时，或 Tech VP 回复后触发)**：
-    *   *条件判定*：Flask 轮询发现 Tech VP 给出了正面评价（该评价已通过 `PerceptionBuilder` 进入 Jensen 的记忆）。
-    *   *路由分支*：Flask 注入 `StateChangeEffect`，将 Jensen 的 `current_state` 修改为 `"极度兴奋，确认了技术的颠覆性，决定不惜代价拿下这个项目。"`，进入 Phase 3。
+### Phase 3：舌战群儒，绝地反击 (Turn 13 - 20) 【全场高潮】
+*   **当前物理分布**：所有人（玩家 + 5 个 Agent）齐聚 `negotiation_room`。
+*   **动态交互 (6 方混战)**：
+    *   Jensen 带着玩家入场，向三大巨头摊牌：“我们不需要买那么多 HBM 了，这位年轻人有新的解决方案。”
+    *   **阵营对抗**：SK Hynix、Micron、Samsung 会疯狂质疑玩家的技术（“这不可能！”“PPT 骗局！”）。
+    *   玩家需要通过输入进行反驳。Jensen 和 Tech VP 会在此时**主动附和并支援玩家**。
+*   **【路由节点 C】 (Turn 20 结束时触发)**：
+    *   *条件判定*：玩家成功顶住压力（`Burnout` 未爆表，`Vision` 足够高）。
+    *   *状态跃迁*：三大巨头态度软化，放弃涨价。Flask 注入 **`MoveEffect`**，将三大巨头 (Agent 4, 5, 6) 移动到 `nvidia_reception`（灰溜溜地离开）。进入 Phase 4。
 
-### Phase 3：记忆生效与态度反转 (Turn 26 - 40) 【爽点爆发区】
-*   **当前状态 (`current_state`)**：基于 Tech VP 的背书和更新后的状态，Jensen 的态度发生 **180 度大反转**。
-*   **动态交互**：Jensen 主动抛出橄榄枝（如提供 500 张 H100），附带严苛的对赌协议。玩家自由讨价还价。
-*   **【路由节点 C】 (Turn 40 结束时触发检查)**：
-    *   *条件判定*：检查是否达成初步口头协议，进入结算谈判。
-
-### Phase 4：结局结算 (Turn 41 - 50)
-*   **动态交互**：对赌协议细节拉扯。
-*   **【终极路由节点 D】 (Turn 50 结束时)**：
-    *   *条件判定*：根据最终的 `Execution` 和 `Trust` 数值。
-    *   *结局分发*：生成最终投资条款（Term Sheet），展示 Demo 评级。
+### Phase 4：胜利的果实 (Turn 21 - 25)
+*   **当前物理分布**：只剩下玩家、Jensen、Tech VP 在 `negotiation_room`。
+*   **动态交互**：
+    *   Jensen 恢复了从容，对玩家大加赞赏。
+    *   抛出终极选择：“年轻人，你拯救了 NVIDIA 的利润率。现在，我给你两个选择：1. 加入我们，做首席科学家；2. 自己开公司，我给你 1 亿美金的种子轮投资。”
+*   **【终极路由节点 D】 (Turn 25 结束)**：
+    *   根据玩家的选择和最终的 `Trust` 数值，生成结局画面。游戏圆满结束。
