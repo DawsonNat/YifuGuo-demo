@@ -55,8 +55,8 @@
   "event": {
     "id": "task_9527",
     "trigger": {
-      "type": "at_time",
-      "t": 0 
+      "type": "at_condition",
+      "condition": "True"
     },
     "effect": {
       "type": "broadcast_event",
@@ -103,6 +103,7 @@
 4. 如果已完成，直接以**只读模式**查询 `WorldDB`：
    - 查询 `overhear` 表：获取 Tick 范围内产生的 F2F 消息（作为 `public_messages`）。
    - 查询 `direct_message` 表：获取 Tick 范围内产生的 RDC 私聊消息（作为 `observer_messages`）。
+   - 查询 `group_event` 表：获取 Tick 范围内产生的群聊消息（作为 `group_messages`）。
 
 **Response Body (JSON)**:
 ```json
@@ -140,14 +141,25 @@
       }
     ],
     
-    // 3. 状态面板数据 (由 Flask 层维护)
+    // 3. 群聊密谋数据 (来自 group_event 表)
+    "group_messages": [
+      {
+        "tick": 32,
+        "sender": "SK Hynix CEO",
+        "group_id": 200,
+        "content": "别慌，这小子肯定在吹牛，我们咬死 30% 涨价不松口！",
+        "type": "GRP"
+      }
+    ],
+    
+    // 4. 状态面板数据 (由 Flask 层维护)
     "stats_update": {
       "vision": 25,
       "execution": 15,
       "trust": 10
     },
     
-    // 4. 路由状态 (通知前端当前处于哪个 Phase)
+    // 5. 路由状态 (通知前端当前处于哪个 Phase)
     "current_phase": "Phase 2"
   }
 }
@@ -167,7 +179,7 @@
    {
      "event": {
        "id": "route_phase2",
-       "trigger": { "type": "at_time", "t": 0 },
+       "trigger": { "type": "at_condition", "condition": "True" },
        "effect": {
          "type": "state_change",
          "agent_id": 2,

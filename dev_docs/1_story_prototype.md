@@ -10,6 +10,7 @@
 1.  **`nvidia_reception` (英伟达接待前台)**：玩家初始出生点。
 2.  **`negotiation_room` (主谈判会议室)**：三大存储巨头逼宫英伟达的战场。（*注：氛围会在 Phase 3 发生突变*）
 3.  **`jensen_private_room` (黄仁勋私人会议室)**：私密的技术验证空间。
+4.  **`openai_hq` (OpenAI 总部)**：Sam Altman 所在的远程地点。
 
 ### 2. 出场角色 (Agents - 3大阵营, 6个实体Agent)
 
@@ -50,7 +51,7 @@
     *   **前台 (Agent 1)** 判定技术价值极高，调用 `send_message` (RDC) 给 Jensen 报信：“老板，前台有个辍学生说他的算法能把 HBM 需求砍掉 80%，您要见吗？”
 *   **【路由节点 A】 (Turn 4 结束时触发)**：
     *   *条件判定*：Flask 检查 `Vision` + `Execution` 是否达标。
-    *   *状态跃迁*：若达标，Flask 注入 **`MoveEffect`**，将 Jensen (Agent 2) 瞬间移动到 `jensen_private_room`。同时前端 UI 提示：“前台带你穿过走廊，进入了一间私密会议室。Jensen 穿着皮衣推门而入。” 进入 Phase 2。
+    *   *状态跃迁*：若达标，Flask 注入 **`MoveEffect`**，将 Jensen (Agent 2) 瞬间移动到 `jensen_private_room`。同时前端 UI 提示：“前台带你穿过走廊，进入了一间私密会议室。Jensen 穿着皮衣推门而入。” 进入 Phase 2。（*注：玩家没有实体 Agent，玩家的“移动”纯粹是前端状态的改变。前端只需在下一次调用 API 1 时，把 JSON 里的 `place_id` 换成 `jensen_private_room` 即可*）。
     *   *失败分支*：若未达标，前台回复：“保安，把他轰出去。” 触发 Bad End。
 
 ### Phase 2：私密的技术审查与内心 OS (Turn 5 - 12)

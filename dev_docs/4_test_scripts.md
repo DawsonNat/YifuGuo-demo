@@ -46,8 +46,8 @@ def test_interaction():
         "event": {
             "id": task_id,
             "trigger": {
-                "type": "at_time",
-                "t": 0  # 立即触发
+                "type": "at_condition",
+                "condition": "True"  # 立即无条件触发，防止过期丢弃
             },
             "effect": {
                 "type": "broadcast_event",
@@ -94,6 +94,10 @@ def test_interaction():
             print("\n--- 👁️ 上帝视角 (Observer Messages) ---")
             for msg in data.get("observer_messages", []):
                 print(f"[Tick {msg['tick']}] {msg['sender']} -> {msg['receiver']} ({msg['type']}): {msg['content']}")
+                
+            print("\n--- 👥 群聊密谋 (Group Messages) ---")
+            for msg in data.get("group_messages", []):
+                print(f"[Tick {msg['tick']}] {msg['sender']} -> 群 {msg['group_id']} ({msg['type']}): {msg['content']}")
                 
             print("\n--- 💬 主聊天框 (Public Messages) ---")
             for msg in data.get("public_messages", []):
