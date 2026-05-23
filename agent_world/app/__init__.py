@@ -23,8 +23,10 @@ def create_app(config_class: type = Config) -> Flask:
     # Register blueprints. Imported here (not at module top) to avoid
     # circular imports during partial L0 wiring.
     from .api import simulation_bp
+    from agent_world.hbm_demo.routes import hbm_bp
 
     app.register_blueprint(simulation_bp, url_prefix="/api/simulation")
+    app.register_blueprint(hbm_bp, url_prefix="/api/hbm")
 
     @app.route("/health")
     def health() -> dict:
