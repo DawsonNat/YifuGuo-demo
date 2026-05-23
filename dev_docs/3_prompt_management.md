@@ -4,7 +4,27 @@
 
 ---
 
-## 一、 场景设定 (Places)
+## 一、 全局仿真配置 (Global Config)
+
+```yaml
+simulation_id: hbm_memory_war
+num_ticks: 50
+
+clock:
+  start_time: "14:00"          # 下午 2 点，谈判最焦灼的时刻
+  minutes_per_tick: 2          # 每拍 2 分钟，节奏紧凑
+
+llm:
+  base_url: https://api.deepseek.com
+  api_key_env: DMXAPI_KEY
+  model: deepseek-chat
+  temperature: 0.85
+  max_tokens: 500
+```
+
+---
+
+## 二、 场景设定 (Places)
 
 ```yaml
 places:
@@ -36,11 +56,20 @@ places:
       summary: 黄仁勋的私人会议室，极其私密。
       behavior_hint: |
         这里只谈最核心的底层技术。没有废话。
+
+  - place_id: openai_hq
+    capacity: 5
+    attrs:
+      timezone: America/Los_Angeles
+      roster_visible: false
+      summary: OpenAI 硅谷总部。
+      behavior_hint: |
+        远离英伟达的硝烟，但时刻关注着算力市场的风吹草动。
 ```
 
 ---
 
-## 二、 角色设定 (Agents)
+## 三、 角色设定 (Agents)
 
 ### 1. 接待前台 (Agent ID: 1, 初始位置: `nvidia_reception`)
 ```yaml
@@ -122,9 +151,22 @@ behavior_hint: |
   在 Phase 3 混战中：你假装对玩家的技术感兴趣，实则是为了套出技术漏洞。
   **强制规则 (背刺盟友)**：如果你发现玩家的技术无可挑剔，且系统突然广播了对存储联盟不利的新闻（如 AMD 研发新架构），你必须为了自保，**立刻调用 `relation_change` 工具**解除与 SK Hynix (Agent 4) 的 "ally" 关系，并在谈判桌上当场倒戈，支持玩家和英伟达！
 ```
+### 7. Sam Altman (Agent ID: 7, 初始位置: `openai_hq`)
+```yaml
+soul: |
+  OpenAI CEO。你是目前全球最大的算力买家，时刻保持着对前沿技术的极度敏锐。
+  你说话温和但极具煽动性，擅长在关键时刻出手抢夺核心资源。
+long_term_goal: |
+  寻找能降低大模型推理成本的颠覆性算法，减少对 NVIDIA 的算力依赖。
+current_state: |
+  你正在 OpenAI 总部关注着 NVIDIA 内部的动向。
+behavior_hint: |
+  **强制规则 (搅局者)**：在 Phase 3 时，你会收到系统注入的指令。你必须立刻使用 `send_message` 工具，通过 RDC 通道向 Jensen (Agent 2) 发送私信，表达你对那个 19 岁辍学生算法的强烈兴趣，并暗示 OpenAI 愿意出高价截胡。
+```
+
 ---
 
-## 五、 底层通信与社交图谱配置 (Engine Dependencies)
+## 四、 底层通信与社交图谱配置 (Engine Dependencies)
 
 为了让上述的角色设定和剧情逻辑（如私聊、群聊）能在底层引擎中顺利跑通，必须在 `scenario.yaml` 中补充以下硬性依赖配置：
 
@@ -134,12 +176,14 @@ behavior_hint: |
 coverage:
   - {src: nvidia_reception, dst: negotiation_room, latency_ticks: 1}
   - {src: negotiation_room, dst: nvidia_reception, latency_ticks: 1}
-  - {src: negotiation_room, dst: tech_vp_office, latency_ticks: 1}
-  - {src: tech_vp_office, dst: negotiation_room, latency_ticks: 1}
+  - {src: jensen_private_room, dst: negotiation_room, latency_ticks: 1}
+  - {src: negotiation_room, dst: jensen_private_room, latency_ticks: 1}
+  - {src: openai_hq, dst: negotiation_room, latency_ticks: 1}
+  - {src: negotiation_room, dst: openai_hq, latency_ticks: 1}
 ```
 
 ### 2. Agent 通信能力 (Capabilities)
-赋予所有 6 个 Agent 发送 RDC 和 GRP 消息的基础能力。
+赋予所有 7 个 Agent 发送 RDC 和 GRP 消息的基础能力。
 ```yaml
 capabilities:
   - {agent_id: 1, capability: signal_uplink}
@@ -148,6 +192,7 @@ capabilities:
   - {agent_id: 4, capability: signal_uplink}
   - {agent_id: 5, capability: signal_uplink}
   - {agent_id: 6, capability: signal_uplink}
+  - {agent_id: 7, capability: signal_uplink}
 ```
 
 ### 3. 人际关系图谱 (Relations)
@@ -156,6 +201,7 @@ capabilities:
 relations:
   - {src: 1, dst: 2, type: subordinate, symmetric: false} # 前台 -> Jensen
   - {src: 2, dst: 3, type: colleague, symmetric: true}    # Jensen <-> Tech VP
+  - {src: 2, dst: 7, type: business_partner, symmetric: true} # Jensen <-> Sam Altman
   - {src: 4, dst: 5, type: ally, symmetric: true}         # 海力士 <-> 美光
   - {src: 4, dst: 6, type: ally, symmetric: true}         # 海力士 <-> 三星
   - {src: 5, dst: 6, type: ally, symmetric: true}         # 美光 <-> 三星

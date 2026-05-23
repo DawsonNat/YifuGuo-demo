@@ -26,6 +26,9 @@
 5.  **Micron CEO (Agent 5)**：位于 `negotiation_room`。跟风涨价的华尔街商人。
 6.  **Samsung CEO (Agent 6)**：位于 `negotiation_room`。老谋深算，随时准备背刺盟友。
 
+**【第三方破局者】**
+7.  **Sam Altman (Agent 7)**：OpenAI CEO。不在现场（位于 `openai_hq`）。他作为最大的算力买家，时刻关注着底层技术的突破。
+
 ---
 
 ## 二、 核心数值系统 (Stats)
@@ -72,8 +75,10 @@
     *   **Micron (Agent 5)** 攻击商业：“PPT 骗局，如果你信他，我们明天的产能就全给 Google 和 AMD。”
     *   **Samsung (Agent 6)** 攻击生态：“年轻人，算法再好，没有我们的 2.5D 高级封装，你也做不出芯片。”
     *   **玩家** 需要逐一驳斥。**Tech VP** 会用硬核术语帮玩家圆场；**Jensen** 会用玩家的技术去压价。
-    *   **【系统广播触发】**：在谈判最焦灼时，Flask 突然注入 **`BroadcastEventEffect`**：“*会议室的彭博社终端机突然弹出快讯：AMD 宣布下一代 MI400 芯片将采用全新自研显存架构，试图摆脱 HBM 依赖...*”
-    *   **【关系破裂触发】**：这则突发新闻加上玩家无懈可击的技术逻辑，彻底击溃了存储联盟的心理防线。**Samsung CEO (Agent 6)** 见势不妙，为了抢占英伟达的订单，**主动调用 `relation_change` 工具**，单方面解除与 SK Hynix (Agent 4) 的“盟友”关系，并在谈判桌上当场倒戈，支持玩家的技术。
+    *   **【系统广播触发】**：在谈判最焦灼时，Flask 突然注入 **`BroadcastEventEffect`**：“*会议室的彭博社终端机突然弹出快讯：AMD 宣布下一代 MI400 芯片将采用全新自研显存架构...*”
+    *   **【Sam Altman 搅局触发】**：紧接着，Flask 注入事件，让远在 `openai_hq` 的 **Sam Altman (Agent 7)** 通过 RDC 私聊 Jensen：“*Jensen，听说有个做稀疏注意力的小孩在你那里？别急着拒绝，我们 OpenAI 很有兴趣。*”
+    *   **【关系破裂触发】**：突发新闻加上 Sam Altman 的抢人举动，彻底击溃了存储联盟的心理防线。**Samsung CEO (Agent 6)** 见势不妙，**主动调用 `relation_change` 工具**，解除与 SK Hynix (Agent 4) 的“盟友”关系，并在谈判桌上当场倒戈。
+    *   **Jensen** 收到 Sam 的私信后，产生强烈的危机感，态度从“利用玩家压价”转变为“必须立刻签下独家协议”。
 *   **【路由节点 C】 (Turn 20 结束时触发)**：
     *   *条件判定*：玩家成功顶住压力（`Burnout` 未爆表，`Vision` 足够高）。
     *   *状态跃迁*：存储联盟瓦解。Flask 注入 **`MoveEffect`**，将三大巨头移到 `nvidia_reception`（灰溜溜地离开）。前端 UI 提示：“三大巨头面色铁青地收拾文件离开了会议室。” 进入 Phase 4。
