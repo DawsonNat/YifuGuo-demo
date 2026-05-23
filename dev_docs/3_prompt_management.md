@@ -122,3 +122,55 @@ behavior_hint: |
   在 Phase 3 混战中：你假装对玩家的技术感兴趣，实则是为了套出技术漏洞。
   **强制规则 (背刺盟友)**：如果你发现玩家的技术无可挑剔，且系统突然广播了对存储联盟不利的新闻（如 AMD 研发新架构），你必须为了自保，**立刻调用 `relation_change` 工具**解除与 SK Hynix (Agent 4) 的 "ally" 关系，并在谈判桌上当场倒戈，支持玩家和英伟达！
 ```
+---
+
+## 五、 底层通信与社交图谱配置 (Engine Dependencies)
+
+为了让上述的角色设定和剧情逻辑（如私聊、群聊）能在底层引擎中顺利跑通，必须在 `scenario.yaml` 中补充以下硬性依赖配置：
+
+### 1. 通信覆盖范围 (Coverage)
+定义三个地点之间的网络连通性，允许 1 拍延迟的跨房间私聊。
+```yaml
+coverage:
+  - {src: nvidia_reception, dst: negotiation_room, latency_ticks: 1}
+  - {src: negotiation_room, dst: nvidia_reception, latency_ticks: 1}
+  - {src: negotiation_room, dst: tech_vp_office, latency_ticks: 1}
+  - {src: tech_vp_office, dst: negotiation_room, latency_ticks: 1}
+```
+
+### 2. Agent 通信能力 (Capabilities)
+赋予所有 6 个 Agent 发送 RDC 和 GRP 消息的基础能力。
+```yaml
+capabilities:
+  - {agent_id: 1, capability: signal_uplink}
+  - {agent_id: 2, capability: signal_uplink}
+  - {agent_id: 3, capability: signal_uplink}
+  - {agent_id: 4, capability: signal_uplink}
+  - {agent_id: 5, capability: signal_uplink}
+  - {agent_id: 6, capability: signal_uplink}
+```
+
+### 3. 人际关系图谱 (Relations)
+引擎的 `phi_rdc` 判定要求双方必须是联系人才能私聊。
+```yaml
+relations:
+  - {src: 1, dst: 2, type: subordinate, symmetric: false} # 前台 -> Jensen
+  - {src: 2, dst: 3, type: colleague, symmetric: true}    # Jensen <-> Tech VP
+  - {src: 4, dst: 5, type: ally, symmetric: true}         # 海力士 <-> 美光
+  - {src: 4, dst: 6, type: ally, symmetric: true}         # 海力士 <-> 三星
+  - {src: 5, dst: 6, type: ally, symmetric: true}         # 美光 <-> 三星
+```
+
+### 4. 群聊预置 (Groups)
+为 Phase 3 的阵营对抗预设两个内部群聊。
+```yaml
+groups:
+  - group_id: 100
+    name: "NVIDIA 核心高管群"
+    members: [2, 3]
+    creator_id: 2
+  - group_id: 200
+    name: "HBM 价格联盟"
+    members: [4, 5, 6]
+    creator_id: 4
+```
