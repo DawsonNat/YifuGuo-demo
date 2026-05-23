@@ -35,8 +35,7 @@ import requests
 import uuid
 
 # 配置
-BASE_URL = "http://127.0.0.1:5000/api/simulation/shedog_husband"
-JENSEN_AGENT_ID = 2
+BASE_URL = "http://127.0.0.1:5000/api/simulation/hbm_memory_war"
 
 def test_interaction():
     print("=== 开始测试双段式异步 API ===")
@@ -51,9 +50,10 @@ def test_interaction():
                 "t": 0  # 立即触发
             },
             "effect": {
-                "type": "dialogue_injection",
-                "agent_id": JENSEN_AGENT_ID,
-                "text": "玩家说：黄总，我的底层算法能让渲染速度提升 10 倍。"
+                "type": "broadcast_event",
+                "scope": "place",
+                "place_id": "negotiation_room",
+                "message": "玩家说：黄总，我的底层算法能让显存消耗降低 80%。"
             }
         }
     }
