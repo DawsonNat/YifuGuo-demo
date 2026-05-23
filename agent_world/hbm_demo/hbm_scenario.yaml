@@ -1,5 +1,8 @@
 simulation_id: hbm_memory_war
 
+runner:
+  parallel_agent_decisions: true
+
 clock:
   start_time: "14:00"
   minutes_per_tick: 2

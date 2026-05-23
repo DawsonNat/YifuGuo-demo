@@ -14,6 +14,7 @@ from agent_world.buses.group_message import GroupMessageBus
 from agent_world.buses.remote_message import RemoteMessageBus
 from agent_world.hbm_demo.hbm_agent import HbmAgent
 from agent_world.hbm_demo.seed import seed_world
+from agent_world.hbm_demo.world_step import HbmWorldStep
 from agent_world.memory.segment import SegmentStore
 from agent_world.persistence.world_db import WorldDB
 from agent_world.script.engine import ScriptEngine
@@ -322,7 +323,11 @@ async def build_kernel(
         world_state.register_agent(aid, agent)
         agents.append(agent)
 
-    world_step = WorldStep(
+    runner_cfg = scenario.get("runner") or {}
+    parallel_agents = bool(runner_cfg.get("parallel_agent_decisions", True))
+    step_cls = HbmWorldStep if parallel_agents else WorldStep
+
+    world_step = step_cls(
         world_state=world_state,
         perception_builder=perception,
         dispatcher=dispatcher,
