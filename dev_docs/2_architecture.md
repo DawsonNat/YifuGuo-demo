@@ -47,11 +47,9 @@
 **Endpoint**: `POST /api/simulation/<sim_id>/inject-event`
 
 **Request Body (JSON)**:
-前端直接构造一个合法的 Script Event。
-*   **单人对话 (Phase 1/2)**：利用 `DialogueInjectionEffect` 将玩家的话注入给特定 NPC (如前台 Agent 1 或 Jensen Agent 2)。
-*   **全房间对话 (Phase 3)**：利用 `BroadcastEventEffect` (scope="place") 将玩家的话广播给会议室里的所有人。
+前端直接构造一个合法的 Script Event，利用 `BroadcastEventEffect` 将玩家的话作为系统广播注入到玩家当前所在的房间（Place）中。这样不仅房间内的所有 NPC 都能听到，而且消息会落库到 `WorldDB`，方便 API 2 轮询读取。
 
-示例 (单人对话注入给 Jensen)：
+示例 (玩家在私人会议室对 Jensen 说话)：
 ```json
 {
   "event": {
@@ -61,9 +59,10 @@
       "t": 0 
     },
     "effect": {
-      "type": "dialogue_injection",
-      "agent_id": 2,
-      "text": "玩家说：黄总，我的底层算法能让显存消耗降低 80%。"
+      "type": "broadcast_event",
+      "scope": "place",
+      "place_id": "jensen_private_room",
+      "message": "玩家说：黄总，我的底层算法能让显存消耗降低 80%。"
     }
   }
 }
@@ -83,7 +82,7 @@
 ```json
 {
   "success": true,
-  "simulation_id": "shedog_husband",
+  "simulation_id": "hbm_memory_war",
   "data": {
     "task_id": "task_9527",
     "immediate_msg": "Jensen 停下了喝水的动作，眼神变得锐利起来...",
@@ -109,7 +108,7 @@
 ```json
 {
   "success": true,
-  "simulation_id": "shedog_husband",
+  "simulation_id": "hbm_memory_war",
   "data": {
     "status": "completed",
     "end_tick": 32,

@@ -55,3 +55,7 @@
 
 ---
 **结论**：以上 4 点是底层引擎运行的“硬性依赖”。我将立刻把这些配置补充到 `dev_docs/3_prompt_management.md` 中，使其成为一份可以直接 Copy-Paste 运行的完整 YAML 蓝图。
+
+## 5. 遗漏点：全局仿真配置 (Global Config)
+*   **问题**：`scenario.yaml` 必须包含顶层的 `simulation_id`、`clock` 和 `llm` 配置，否则引擎无法启动。
+*   **补充方案**：在 `3_prompt_management.md` 顶部补充全局配置块，使其成为一份完整的 YAML 蓝图。
