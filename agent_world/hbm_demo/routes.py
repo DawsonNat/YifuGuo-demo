@@ -57,7 +57,7 @@ def session_start(sim_id: str):
 
 @hbm_bp.route("/simulations/<sim_id>/env-status", methods=["GET"])
 def env_status(sim_id: str):
-    """Read Runner ``env_status.json`` (tick sync for API 2 in Phase 3+)."""
+    """Read Runner ``env_status.json``."""
     err = _check_sim_id(sim_id)
     if err:
         return err
@@ -69,9 +69,61 @@ def env_status(sim_id: str):
     return jsonify({"success": True, "data": env})
 
 
+@hbm_bp.route("/simulations/<sim_id>/player-turn", methods=["POST"])
+def player_turn(sim_id: str):
+    """API 1 — score, inject, return task_id for polling."""
+    err = _check_sim_id(sim_id)
+    if err:
+        return err
+
+    body = _json_body()
+    player_text = str(body.get("player_text") or "").strip()
+    if not player_text:
+        return _bad_request("player_text is required")
+
+    try:
+        result = gs.handle_player_turn(
+            session,
+            sim_id=sim_id,
+            player_text=player_text,
+            request_place_id=body.get("place_id"),
+            request_phase=body.get("phase"),
+            request_player_turn=body.get("player_turn"),
+            tick_count=int(body.get("tick_count", 6)),
+        )
+    except RuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+
+    return jsonify({"success": True, "data": result})
+
+
+@hbm_bp.route("/simulations/<sim_id>/action-result", methods=["GET"])
+def action_result(sim_id: str):
+    """API 2 — poll until NPC activity completes or timeout."""
+    err = _check_sim_id(sim_id)
+    if err:
+        return err
+
+    task_id = str(request.args.get("task_id") or "").strip()
+    if not task_id:
+        return _bad_request("task_id query parameter is required")
+
+    try:
+        result = gs.get_action_result(
+            session,
+            sim_id=sim_id,
+            task_id=task_id,
+            request_place_id=request.args.get("place_id"),
+        )
+    except KeyError as exc:
+        return _bad_request(str(exc), 404)
+
+    return jsonify({"success": True, "data": result})
+
+
 @hbm_bp.route("/simulations/<sim_id>/debug-inject", methods=["POST"])
 def debug_inject(sim_id: str):
-    """Phase 2 temporary endpoint: inject player text and advance ticks via IPC."""
+    """Phase 2 temporary endpoint — kept for manual IPC testing."""
     err = _check_sim_id(sim_id)
     if err:
         return err
