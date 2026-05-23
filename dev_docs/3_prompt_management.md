@@ -192,6 +192,11 @@ coverage:
   - {src: negotiation_room, dst: negotiation_room, latency_ticks: 0}
   - {src: jensen_private_room, dst: jensen_private_room, latency_ticks: 0}
   - {src: openai_hq, dst: openai_hq, latency_ticks: 0}
+  # 必须补充自环覆盖，否则 phi_grp 校验失败，群聊消息会被全部静默拦截
+  - {src: nvidia_reception, dst: nvidia_reception, latency_ticks: 0}
+  - {src: negotiation_room, dst: negotiation_room, latency_ticks: 0}
+  - {src: jensen_private_room, dst: jensen_private_room, latency_ticks: 0}
+  - {src: openai_hq, dst: openai_hq, latency_ticks: 0}
 ```
 
 ### 2. Agent 通信能力 (Capabilities)
