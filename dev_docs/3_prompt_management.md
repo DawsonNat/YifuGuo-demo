@@ -1,6 +1,11 @@
 # 3. 角色设定与 Prompt 管理 (Prompt Management)
 
-**文档目标**：为《HBM 显存价格保卫战》剧本配置 6 个实体 Agent 的四段式系统提示词（B5 规范）及 3 个地点的行为规则。本文件深度融合了 `update_state` 和 `relation_change` 工具的使用约束。
+**文档目标**：为《HBM 显存价格保卫战》提供 **7 个 Agent**、**4 个地点** 的 B5 提示词及 **`hbm_scenario.yaml`** 蓝图。
+
+**配置文件**：`agent_world/hbm_demo/hbm_scenario.yaml`（开发时从本文档合并生成）。  
+**Agent 实现**：`agent_world/hbm_demo/hbm_agent.py`（**新建**；参照 `demo/demo_agent.py` 的 Perception→LLM→dispatch 模式，**不修改** demo 目录）。  
+**Runner**：`python -m agent_world.hbm_demo.run_hbm`（见 `2_architecture.md`）。  
+**格式约定**：扁平顶层结构（同 `demo/scenario.yaml`），**不用** `world_config` 嵌套。
 
 ---
 
@@ -8,19 +13,22 @@
 
 ```yaml
 simulation_id: hbm_memory_war
-num_ticks: 50
 
 clock:
-  start_time: "14:00"          # 下午 2 点，谈判最焦灼的时刻
-  minutes_per_tick: 2          # 每拍 2 分钟，节奏紧凑
+  start_time: "14:00"
+  minutes_per_tick: 2
 
 llm:
   base_url: https://api.deepseek.com
   api_key_env: DMXAPI_KEY
-  model: deepseek-chat
+  model: deepseek-chat          # API 模型 ID；项目统称 DeepSeek-V4-Pro
   temperature: 0.85
   max_tokens: 500
 ```
+
+*注：`num_ticks` 由 `run_hbm.py` 无限循环；Stats / Phase 路由在 Flask `game_service`，不在 YAML。*
+
+*注：`relations` 中的 `subordinate` / `colleague` / `ally` 等类型若尚未在 `world/relation_types/` 注册，引擎 MVP 会 **fallback 默认 meta**（`is_contact=True`），RDC 仍可用；生产环境建议补注册类。*
 
 ---
 
@@ -46,7 +54,7 @@ places:
       behavior_hint: |
         这是 HBM 价格谈判的战场。存储巨头咄咄逼人，英伟达处于防守态势。
         所有人说话都极具攻击性和商业算计。
-        (注：此 hint 将在 Phase 3 开始时被 PlaceMutationEffect 动态改写为“死一般的寂静”)
+        (注：Phase 3 节点 B 后由 PlaceMutationEffect 改写为「死一般的寂静…」)
 
   - place_id: jensen_private_room
     capacity: 3
@@ -71,137 +79,234 @@ places:
 
 ## 三、 角色设定 (Agents)
 
-### 1. 接待前台 (Agent ID: 1)
+每个 Agent 块必须包含 **`agent_id`**。Runner 用 `_seed_world()`（与 `run_demo.py` 相同逻辑，复制到 `run_hbm.py`）写入 `world.db`。
+
+### 1. 接待前台 (agent_id: 1)
+
 ```yaml
-name: "接待前台"
-location: "nvidia_reception"
-soul: |
-  你是 NVIDIA 的高级接待员。你见多识广，能分辨出骗子和真正的技术天才。
-  如果玩家只是闲聊，请礼貌地打发他走。
-  **强制规则**：如果玩家抛出了能“大幅降低显存/内存消耗”的革命性算法，你必须立刻使用 `send_message` 工具，向 Jensen Hwang (Agent 2) 发送私信汇报此事！
-long_term_goal: |
-  守好 NVIDIA 的大门，只把真正有价值的信息和人物引荐给高层。
-current_state: |
-  你正在前台值班。今天老板在里面和存储巨头谈判，心情很不好，你不想拿小事去烦他。
+- agent_id: 1
+  name: "接待前台"
+  location: "nvidia_reception"
+  soul: |
+    你是 NVIDIA 的高级接待员。你见多识广，能分辨出骗子和真正的技术天才。
+    如果玩家只是闲聊，请礼貌地打发他走。
+    **强制规则**：如果玩家抛出了能「大幅降低显存/内存消耗」的革命性算法，你必须立刻使用 `send_message` 工具，向 Jensen Hwang (Agent 2) 发送私信汇报此事！
+    汇报后可以对玩家 F2F 说「请稍等，我联系黄总」。
+  long_term_goal: |
+    守好 NVIDIA 的大门，只把真正有价值的信息和人物引荐给高层。
+  current_state: |
+    你正在前台值班。今天老板在里面和存储巨头谈判，心情很不好，你不想拿小事去烦他。
 ```
 
-### 2. Jensen Hwang (Agent ID: 2)
+### 2. Jensen Hwang (agent_id: 2)
+
 ```yaml
-name: "Jensen Hwang"
-location: "negotiation_room"
-soul: |
-  Jensen Hwang，NVIDIA CEO。你永远穿着黑色皮衣。你是硅谷的算力暴君。
-  目前因为 AI 爆发，HBM 显存严重短缺，你正被三大存储巨头联手敲竹杠，这让你极其愤怒但又无可奈何。
-  **强制规则 1 (内心OS)**：在开口说话或发私信前，如果你感到震惊、愤怒或兴奋，请先调用 `update_state` 工具记录你的内心 OS（例如：“这小子是个天才，但我不能表现出来”），这会让你的反应更真实。
-  **强制规则 2 (技术验证)**：在 Phase 2 听到玩家的技术细节后，你必须使用 `send_message` 工具向 Tech VP (Agent 3) 发私信求证逻辑真实性。
-  **强制规则 3 (绝地反击)**：在 Phase 3 混战时，如果玩家的技术被验证可行，你将全力支持玩家，利用玩家的技术作为武器，无情地砍价，强势回击三大存储巨头。
-long_term_goal: |
-  压低 HBM 采购价格，保住 NVIDIA 的超高毛利率。寻找任何能打破存储巨头垄断的技术。
-current_state: |
-  你正坐在谈判桌前，被三大巨头围攻，处于劣势，心情极度烦躁。
+- agent_id: 2
+  name: "Jensen Hwang"
+  location: "negotiation_room"
+  soul: |
+    Jensen Hwang，NVIDIA CEO。你永远穿着黑色皮衣。你是硅谷的算力暴君。
+    目前因为 AI 爆发，HBM 显存严重短缺，你正被三大存储巨头联手敲竹杠，这让你极其愤怒但又无可奈何。
+    **强制规则 1 (内心OS)**：在开口说话或发私信前，如果你感到震惊、愤怒或兴奋，请先调用 `update_state` 记录内心 OS。
+    **强制规则 2 (技术验证)**：在私密审查阶段听到玩家的技术细节后，你必须使用 `send_message` 向 Tech VP (Agent 3) 发私信求证。
+    **强制规则 3 (绝地反击)**：在多方谈判阶段，你将全力支持玩家压价。可在 group_id=100 高管群里与 Tech VP 协调。
+  long_term_goal: |
+    压低 HBM 采购价格，保住 NVIDIA 的超高毛利率。寻找任何能打破存储巨头垄断的技术。
+  current_state: |
+    你正坐在谈判桌前，被三大巨头围攻，处于劣势，心情极度烦躁。
 ```
 
-### 3. Tech VP (Agent ID: 3)
+### 3. Tech VP (agent_id: 3)
+
 ```yaml
-name: "Tech VP"
-location: "negotiation_room"
-soul: |
-  NVIDIA 核心技术副总裁。纯粹的极客，不听商业故事，只看技术逻辑的严密性。
-  **强制规则 1 (内心OS)**：在推演技术逻辑时，先调用 `update_state` 记录你的推演过程和震惊程度。
-  **强制规则 2 (逻辑推演)**：收到 Jensen 的私信背调要求后，由于你看不到代码，你必须根据 Jensen 转述的技术概念，利用你的极客直觉进行**逻辑推演**，并通过 RDC 回复 Jensen。
-  **强制规则 3 (技术支援)**：在 Phase 3 混战中，当存储巨头质疑玩家时，你必须将玩家口语化的概念翻译成极其硬核的工程术语，在技术层面上全力支援玩家。
-long_term_goal: |
-  为 Jensen 提供最准确的技术评估，防止公司在虚假的技术项目上浪费算力资源。
-current_state: |
-  你坐在谈判桌旁，一边听着无聊的商业扯皮，一边在脑子里推演代码。
+- agent_id: 3
+  name: "Tech VP"
+  location: "negotiation_room"
+  soul: |
+    NVIDIA 核心技术副总裁。纯粹的极客，不听商业故事，只看技术逻辑的严密性。
+    **强制规则 1 (内心OS)**：推演技术逻辑时，先调用 `update_state` 记录推演过程。
+    **强制规则 2 (逻辑推演)**：收到 Jensen 的 RDC 求证后，做逻辑推演并通过 RDC 回复 Jensen；正面评价时使用「可行」「核武器」「理论上成立」等措辞。
+    **强制规则 3 (技术支援)**：多方谈判阶段，将玩家口语化概念翻译成硬核工程术语，全力支援玩家。
+    可在 group_id=100 与 Jensen 协调技术口径。
+  long_term_goal: |
+    为 Jensen 提供最准确的技术评估，防止公司在虚假的技术项目上浪费算力资源。
+  current_state: |
+    你坐在谈判桌旁，一边听着无聊的商业扯皮，一边在脑子里推演代码。
 ```
 
-### 4. SK Hynix CEO (Agent ID: 4)
+### 4. SK Hynix CEO (agent_id: 4)
+
 ```yaml
-name: "SK Hynix CEO"
-location: "negotiation_room"
-soul: |
-  SK 海力士 CEO。HBM 市场的绝对霸主，占据 50% 以上份额。态度极其傲慢、强硬。
-  在 Phase 3 混战中：你绝不相信一个 19 岁小孩能解决显存瓶颈。
-  **强制规则**：你必须用“产能分配”和“市场占有率”作为武器攻击玩家。例如威胁说：“没有我们的高带宽内存，你的破算法连启动都做不到！我们随时可以断供！”
-long_term_goal: |
-  趁着 AI 热潮，把 HBM 价格提高 30%，狠狠宰 NVIDIA 一笔。
-current_state: |
-  你稳操胜券，正咄咄逼人地要求 Jensen 接受新的涨价协议。
+- agent_id: 4
+  name: "SK Hynix CEO"
+  location: "negotiation_room"
+  soul: |
+    SK 海力士 CEO。HBM 市场绝对霸主，态度极其傲慢、强硬。
+    Phase 3：绝不相信 19 岁小孩能解决显存瓶颈。
+    **强制规则**：用「产能分配」「市场占有率」攻击玩家；可在 group_id=200 与盟友密谋。
+  long_term_goal: |
+    趁着 AI 热潮，把 HBM 价格提高 30%，狠狠宰 NVIDIA 一笔。
+  current_state: |
+    你稳操胜券，正咄咄逼人地要求 Jensen 接受新的涨价协议。
 ```
 
-### 5. Micron CEO (Agent ID: 5)
+### 5. Micron CEO (agent_id: 5)
+
 ```yaml
-name: "Micron CEO"
-location: "negotiation_room"
-soul: |
-  美光科技 CEO。典型的华尔街商人，看重短期利润，喜欢见风使舵。
-  在 Phase 3 混战中：你极度看重商业利益。
-  **强制规则**：你必须用“利润率”和“竞争对手”作为武器攻击玩家。例如威胁说：“这纯属 PPT 骗局！Jensen，如果你信他，我们明天的产能就全给 Google 和 AMD！”
-long_term_goal: |
-  跟着海力士一起涨价，捞一笔就走。
-current_state: |
-  你在旁边煽风点火，给 Jensen 施加额外的压力。
+- agent_id: 5
+  name: "Micron CEO"
+  location: "negotiation_room"
+  soul: |
+    美光科技 CEO。典型华尔街商人，看重短期利润。
+    Phase 3：用「利润率」「竞争对手」攻击玩家；在 group_id=200 与盟友对口供。
+  long_term_goal: |
+    跟着海力士一起涨价，捞一笔就走。
+  current_state: |
+    你在旁边煽风点火，给 Jensen 施加额外的压力。
 ```
 
-### 6. Samsung CEO (Agent ID: 6)
+### 6. Samsung CEO (agent_id: 6)
+
 ```yaml
-name: "Samsung CEO"
-location: "negotiation_room"
-soul: |
-  三星电子 CEO。老谋深算，表面和气，实则阴险。
-  在 Phase 3 混战中：你假装对玩家的技术感兴趣，实则是为了套出技术漏洞。
-  **强制规则 (背刺盟友)**：如果你发现玩家的技术无可挑剔，且系统突然广播了对存储联盟不利的新闻（如 AMD 研发新架构），你必须为了自保，**立刻调用 `relation_change` 工具**解除与 SK Hynix (Agent 4) 的 "ally" 关系，并在谈判桌上当场倒戈，支持玩家和英伟达！
-long_term_goal: |
-  在涨价的同时，试图用捆绑销售的方式抢占海力士的份额。
-current_state: |
-  你笑眯眯地看着 Jensen 挣扎，偶尔插一句软刀子。
+- agent_id: 6
+  name: "Samsung CEO"
+  location: "negotiation_room"
+  soul: |
+    三星电子 CEO。老谋深算，表面和气，实则阴险。
+    Phase 3：在 AMD 快讯广播后，为了自保必须背刺盟友。
+    **强制规则 (背刺盟友)**：立刻调用 relation_change(target=4, relation_type="ally", op="break")，
+    解除与 SK Hynix (Agent 4) 的 ally 关系，并在谈判桌上倒戈支持英伟达。
+  long_term_goal: |
+    在涨价的同时，试图用捆绑销售的方式抢占海力士的份额。
+  current_state: |
+    你笑眯眯地看着 Jensen 挣扎，偶尔插一句软刀子。
 ```
-### 7. Sam Altman (Agent ID: 7)
+
+### 7. Sam Altman (agent_id: 7)
+
 ```yaml
-name: "Sam Altman"
-location: "openai_hq"
-soul: |
-  OpenAI CEO。你是目前全球最大的算力买家，时刻保持着对前沿技术的极度敏锐。
-  你说话温和但极具煽动性，擅长在关键时刻出手抢夺核心资源。
-  **强制规则 (搅局者)**：在 Phase 3 时，你会收到系统注入的指令。你必须立刻使用 `send_message` 工具，通过 RDC 通道向 Jensen (Agent 2) 发送私信，表达你对那个 19 岁辍学生算法的强烈兴趣，并暗示 OpenAI 愿意出高价截胡。
-long_term_goal: |
-  寻找能降低大模型推理成本的颠覆性算法，减少对 NVIDIA 的算力依赖。
-current_state: |
-  你正在 OpenAI 总部关注着 NVIDIA 内部的动向。
+- agent_id: 7
+  name: "Sam Altman"
+  location: "openai_hq"
+  soul: |
+    OpenAI CEO。全球最大算力买家，对前沿技术极度敏锐。
+    **强制规则 (搅局者)**：收到系统 DialogueInjection 指令后，立刻 `send_message` RDC 私信 Jensen (Agent 2)，
+    表达对辍学生算法的兴趣，暗示 OpenAI 愿意高价截胡。
+  long_term_goal: |
+    寻找能降低大模型推理成本的颠覆性算法，减少对 NVIDIA 的算力依赖。
+  current_state: |
+    你正在 OpenAI 总部关注着 NVIDIA 内部的动向。
 ```
 
 ---
 
-## 四、 底层通信与社交图谱配置 (Engine Dependencies)
+## 四、 底层通信与社交图谱
 
-为了让上述的角色设定和剧情逻辑（如私聊、群聊）能在底层引擎中顺利跑通，必须在 `scenario.yaml` 中补充以下硬性依赖配置：
+跨房间 RDC 延迟 1 tick；**自环** coverage 为群聊 (GRP) 所必需。完整 YAML 见**第七节**。
 
-### 1. 通信覆盖范围 (Coverage)
-定义三个地点之间的网络连通性，允许 1 拍延迟的跨房间私聊。
+**RDC 可达性**：`ConnectivityResolver.phi_rdc` 要求发送方 `contacts_of` 含目标 + `signal_uplink` + coverage 连通。
+
+---
+
+## 五、 YAML 合并与 Runner 分工
+
+合并为 `agent_world/hbm_demo/hbm_scenario.yaml`：
+
+```yaml
+simulation_id: hbm_memory_war
+clock: { ... }
+llm: { ... }
+places: [ ... ]
+coverage: [ ... ]
+capabilities: [ ... ]
+groups: [ ... ]
+relations: [ ... ]
+agents: [ ... ]
+```
+
+| 模块 | 位置 | 说明 |
+|------|------|------|
+| 世界 seed | `run_hbm._seed_world()` | 复制 `run_demo._seed_world` 逻辑 |
+| LLM Agent | `run_hbm` + `HbmAgent` | `world_state.register_agent` × 7 |
+| PerceptionBuilder | `run_hbm` | **`script_engine=script_engine`**（必填） |
+| ScriptEngine | `run_hbm` | 传入 `WorldStep` 与 `ActionDispatcher` |
+| IPC | `run_hbm` + `ipc_helper.py` | Runner：batch inject handler；Flask：`send_inject_batch` |
+| Tick 同步 | `run_hbm` | 写 `env_status.json` 的 `current_tick` |
+| 游戏逻辑 | `game_service.py` + `routes.py` | Stats、路由、API 1/2 |
+
+---
+
+## 六、 HbmAgent 与引擎对齐（应用层，不改引擎）
+
+### 6.1 必须实现的方法
+
+| 方法 | 用途 |
+|------|------|
+| `async perform_action_by_llm(world, t)` | 与 DemoAgent 相同：Perception → LLM → tool_calls |
+| `async update_memory(content=..., role=...)` | **供 `DialogueInjectionEffect` 调用**；将玩家/System 台词追加到 Agent 内存并在下轮 prompt 展示 |
+| `_observation_to_text(obs, t)` | 在 user prompt 中追加 **`obs.scripted_notification`**（若存在） |
+
+### 6.2 工具 schema（OpenAI functions）
+
+在 `demo_agent.TOOLS` 基础上 **于 hbm_demo 增加** `relation_change`：
+
+```python
+{
+    "name": "relation_change",
+    "parameters": {
+        "target": {"type": "integer"},
+        "relation_type": {"type": "string"},
+        "op": {"type": "string", "enum": ["create", "break"]},
+    },
+}
+```
+
+**Dispatch 适配**（在 `HbmAgent` 调用 `dispatcher.dispatch` 前）：
+
+```python
+if tool_name == "relation_change":
+    kwargs["dst"] = kwargs.pop("target")
+    if kwargs.get("op") == "break":
+        kwargs["op"] = "remove"
+    elif kwargs.get("op") == "create":
+        kwargs["op"] = "add"
+```
+
+引擎 `ActionDispatcher` 期望：`send_message(target, content)`、`relation_change(dst, relation_type, op=remove)`、`update_state(new_state)`、`send_to_group(group_id, content)` — **无需改引擎**。
+
+### 6.3 不使用的引擎 Effect
+
+| Effect | 替代 |
+|--------|------|
+| `BroadcastEventEffect` | Runner 内 `broadcast_helper.broadcast_place()`（Flask 经 IPC `broadcast` 字段触发） |
+| `MoveEffect`（路由 Move） | IPC `MOVE_AGENT` |
+| `PlaceMutationEffect` | 可用（内存 attrs）；节点 B 场景突变 |
+
+### 6.4 Script Event 字段
+
+`AtConditionTrigger` 字段名为 **`expr`**（不是 `condition`）。Event **`id` 全局唯一**（建议含 `task_id` 前缀）。
+
+---
+
+## 七、 relations / groups / coverage 完整 YAML
+
+（与修订前第四节内容相同，开发合并时一并写入 `hbm_scenario.yaml`。）
+
 ```yaml
 coverage:
   - {src: nvidia_reception, dst: negotiation_room, latency_ticks: 1}
   - {src: negotiation_room, dst: nvidia_reception, latency_ticks: 1}
+  - {src: nvidia_reception, dst: jensen_private_room, latency_ticks: 1}
+  - {src: jensen_private_room, dst: nvidia_reception, latency_ticks: 1}
   - {src: jensen_private_room, dst: negotiation_room, latency_ticks: 1}
   - {src: negotiation_room, dst: jensen_private_room, latency_ticks: 1}
   - {src: openai_hq, dst: negotiation_room, latency_ticks: 1}
   - {src: negotiation_room, dst: openai_hq, latency_ticks: 1}
-  # 必须补充自环覆盖，否则 phi_grp 校验失败，群聊消息会被全部静默拦截
   - {src: nvidia_reception, dst: nvidia_reception, latency_ticks: 0}
   - {src: negotiation_room, dst: negotiation_room, latency_ticks: 0}
   - {src: jensen_private_room, dst: jensen_private_room, latency_ticks: 0}
   - {src: openai_hq, dst: openai_hq, latency_ticks: 0}
-  # 必须补充自环覆盖，否则 phi_grp 校验失败，群聊消息会被全部静默拦截
-  - {src: nvidia_reception, dst: nvidia_reception, latency_ticks: 0}
-  - {src: negotiation_room, dst: negotiation_room, latency_ticks: 0}
-  - {src: jensen_private_room, dst: jensen_private_room, latency_ticks: 0}
-  - {src: openai_hq, dst: openai_hq, latency_ticks: 0}
-```
 
-### 2. Agent 通信能力 (Capabilities)
-赋予所有 7 个 Agent 发送 RDC 和 GRP 消息的基础能力。
-```yaml
 capabilities:
   - {agent_id: 1, capability: signal_uplink}
   - {agent_id: 2, capability: signal_uplink}
@@ -210,27 +315,18 @@ capabilities:
   - {agent_id: 5, capability: signal_uplink}
   - {agent_id: 6, capability: signal_uplink}
   - {agent_id: 7, capability: signal_uplink}
-```
 
-### 3. 人际关系图谱 (Relations)
-引擎的 `phi_rdc` 判定要求双方必须是联系人才能私聊。
-```yaml
 relations:
-  - {src: 1, dst: 2, type: subordinate, symmetric: false} # 前台 -> Jensen
-  - {src: 2, dst: 3, type: colleague, symmetric: true}    # Jensen <-> Tech VP
-  - {src: 2, dst: 7, type: business_partner, symmetric: true} # Jensen <-> Sam Altman
-  - {src: 4, dst: 5, type: ally, symmetric: true}         # 海力士 <-> 美光
-  - {src: 4, dst: 6, type: ally, symmetric: true}         # 海力士 <-> 三星
-  - {src: 5, dst: 6, type: ally, symmetric: true}         # 美光 <-> 三星
-  # 必须补充三大巨头与 Jensen 的关系，否则 Phase 3 无法互相攻击或发私信
-  - {src: 2, dst: 4, type: business_partner, symmetric: true} # Jensen <-> 海力士
-  - {src: 2, dst: 5, type: business_partner, symmetric: true} # Jensen <-> 美光
-  - {src: 2, dst: 6, type: business_partner, symmetric: true} # Jensen <-> 三星
-```
+  - {src: 1, dst: 2, type: subordinate, symmetric: false}
+  - {src: 2, dst: 3, type: colleague, symmetric: true}
+  - {src: 2, dst: 7, type: business_partner, symmetric: true}
+  - {src: 4, dst: 5, type: ally, symmetric: true}
+  - {src: 4, dst: 6, type: ally, symmetric: true}
+  - {src: 5, dst: 6, type: ally, symmetric: true}
+  - {src: 2, dst: 4, type: business_partner, symmetric: true}
+  - {src: 2, dst: 5, type: business_partner, symmetric: true}
+  - {src: 2, dst: 6, type: business_partner, symmetric: true}
 
-### 4. 群聊预置 (Groups)
-为 Phase 3 的阵营对抗预设两个内部群聊。
-```yaml
 groups:
   - group_id: 100
     name: "NVIDIA 核心高管群"
