@@ -47,7 +47,11 @@
 **Endpoint**: `POST /api/simulation/<sim_id>/inject-event`
 
 **Request Body (JSON)**:
-前端直接构造一个合法的 Script Event，利用 `DialogueInjectionEffect` 将玩家的话注入给 Jensen (假设 ID 为 3)。
+前端直接构造一个合法的 Script Event。
+*   **单人对话 (Phase 1/2)**：利用 `DialogueInjectionEffect` 将玩家的话注入给特定 NPC (如前台 Agent 1 或 Jensen Agent 2)。
+*   **全房间对话 (Phase 3)**：利用 `BroadcastEventEffect` (scope="place") 将玩家的话广播给会议室里的所有人。
+
+示例 (单人对话注入给 Jensen)：
 ```json
 {
   "event": {
@@ -59,7 +63,7 @@
     "effect": {
       "type": "dialogue_injection",
       "agent_id": 2,
-      "text": "玩家说：黄总，我的底层算法能让渲染速度提升 10 倍。"
+      "text": "玩家说：黄总，我的底层算法能让显存消耗降低 80%。"
     }
   }
 }
