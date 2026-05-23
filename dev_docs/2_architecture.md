@@ -98,11 +98,13 @@
 
 **Backend Logic**:
 1. Flask 接收到轮询请求。
-2. 查询 IPC Server 对应的 `task_id` 状态（是否为 `COMPLETED`）。
-3. 如果未完成，返回 `{"status": "processing"}`。
-4. 如果已完成，直接以**只读模式**查询 `WorldDB`：
-   - 查询 `overhear` 表：获取 Tick 范围内产生的 F2F 消息（作为 `public_messages`）。
-   - 查询 `direct_message` 表：获取 Tick 范围内产生的 RDC 私聊消息（作为 `observer_messages`）。
+2. **(修正)** 不再依赖 IPC 的 COMPLETED 状态（因为 IPC 注入事件后会瞬间完成）。Flask 直接查询 `WorldDB` 的 `direct_message` 表，判断自 `task_id` 注入的时间点起，是否满足以下任一**结束条件**：
+   - 目标房间内产生了新的 `F2F` 消息（代表 NPC 终于对玩家开口了）。
+   - 距离注入时间已经过去了超过 5 个 Tick（达到最大静默阈值，防止死循环）。
+3. 如果未满足结束条件，返回 `{"status": "processing"}`。
+4. 如果满足结束条件，直接以**只读模式**查询 `WorldDB` 提取数据：
+   - **(修正)** 查询 `direct_message` 表（条件为 `place_id='当前房间' AND channel_type='F2F'`）：获取公开对话（作为 `public_messages`）。*注：玩家无实体 Agent，不能查 overhear 表。*
+   - 查询 `direct_message` 表（条件为 `channel_type='RDC'`）：获取 Tick 范围内产生的 RDC 私聊消息（作为 `observer_messages`）。
    - 查询 `group_event` 表：获取 Tick 范围内产生的群聊消息（作为 `group_messages`）。
 
 **Response Body (JSON)**:
