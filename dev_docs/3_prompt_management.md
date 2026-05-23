@@ -205,6 +205,10 @@ relations:
   - {src: 4, dst: 5, type: ally, symmetric: true}         # 海力士 <-> 美光
   - {src: 4, dst: 6, type: ally, symmetric: true}         # 海力士 <-> 三星
   - {src: 5, dst: 6, type: ally, symmetric: true}         # 美光 <-> 三星
+  # 必须补充三大巨头与 Jensen 的关系，否则 Phase 3 无法互相攻击或发私信
+  - {src: 2, dst: 4, type: business_partner, symmetric: true} # Jensen <-> 海力士
+  - {src: 2, dst: 5, type: business_partner, symmetric: true} # Jensen <-> 美光
+  - {src: 2, dst: 6, type: business_partner, symmetric: true} # Jensen <-> 三星
 ```
 
 ### 4. 群聊预置 (Groups)
