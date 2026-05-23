@@ -58,7 +58,7 @@
     },
     "effect": {
       "type": "dialogue_injection",
-      "agent_id": 3,
+      "agent_id": 2,
       "text": "玩家说：黄总，我的底层算法能让渲染速度提升 10 倍。"
     }
   }
@@ -167,7 +167,7 @@
        "trigger": { "type": "at_time", "t": 0 },
        "effect": {
          "type": "state_change",
-         "agent_id": 3,
+         "agent_id": 2,
          "new_state": "被玩家的狂言引起了兴趣，决定验证其底层技术的真实性。"
        }
      }

@@ -35,8 +35,8 @@ import requests
 import uuid
 
 # 配置
-BASE_URL = "http://127.0.0.1:5000/api/simulation/jensen_demo"
-JENSEN_AGENT_ID = 3
+BASE_URL = "http://127.0.0.1:5000/api/simulation/shedog_husband"
+JENSEN_AGENT_ID = 2
 
 def test_interaction():
     print("=== 开始测试双段式异步 API ===")
